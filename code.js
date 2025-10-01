@@ -33,8 +33,8 @@ class UltimateFirebaseExtension {
         return {
             id: 'firebaseapi',
             name: 'FirebaseAPI',
+            color1: '#FFA07A',
             blockIconURI: 'https://www.gstatic.com/mobilesdk/240501_mobilesdk/firebase_64dp.png', 
-            color1: '#F75E25',
             blocks: [
                 { opcode: 'loadAndConfigure', blockType: Scratch.BlockType.COMMAND, text: 'Подключить Firebase: URL [DB_URL] API ключ [API_KEY] ID проекта [PROJECT_ID]', arguments: { DB_URL: { type: Scratch.ArgumentType.STRING, defaultValue: 'https://project-id.firebaseio.com' }, API_KEY: { type: Scratch.ArgumentType.STRING, defaultValue: 'AIzaSy...' }, PROJECT_ID: { type: Scratch.ArgumentType.STRING, defaultValue: 'your-project-id' }}},
                 '---',
