@@ -30,7 +30,7 @@ class UltimateFirebaseExtension {
 
     getInfo() {
         return {
-            id: 'firebaseapi',
+            id: 'ultimateFirebase',
             name: 'FirebaseAPI',
             color1: '#C0C0C0',
             blockIconURI: 'https://www.gstatic.com/mobilesdk/240501_mobilesdk/firebase_64dp.png', 
