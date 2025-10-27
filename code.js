@@ -86,6 +86,8 @@ class UltimateFirebaseExtension {
                 '---',
                 { blockType: Scratch.BlockType.LABEL, text: 'База данных в реальном времени (старая)' },
                 { opcode: 'writeData', blockType: Scratch.BlockType.COMMAND, text: 'Записать по пути [PATH] значение [VALUE]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1' }, VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '{"score": 100}' }}},
+                { opcode: 'setDeleteOnDisconnect', blockType: Scratch.BlockType.COMMAND, text: 'При отключении установить по пути [PATH] значение [VALUE]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/online' }, VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: 'false' }}},
+                { opcode: 'cancelOnDisconnect', blockType: Scratch.BlockType.COMMAND, text: 'Отменить команду при отключении для пути [PATH]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/online' }}},
                 { opcode: 'readData', blockType: Scratch.BlockType.REPORTER, text: 'прочитать данные по пути [PATH]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/score' }}},
                 { opcode: 'listenForData', blockType: Scratch.BlockType.HAT, text: 'Когда данные по пути [PATH] изменяются', isEdgeActivated: false, arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'chats/main' }}},
                 { opcode: 'getLastReceivedData', blockType: Scratch.BlockType.REPORTER, text: 'Последние полученные данные'},
@@ -172,6 +174,25 @@ class UltimateFirebaseExtension {
     httpsCallPost(args) { if (!this._isReady('functions')) return; const url = this._getHttpsFunctionUrl(args.ENDPOINT); if (!url) return; const postData = this._parseValue(args.DATA); return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(postData), }).then(response => { if (!response.ok) { throw new Error(`HTTP ошибка! Статус: ${response.status}`); } return response.json(); }).then(data => { this.lastFunctionResult = JSON.stringify(data); this.runtime.startHats('ultimateFirebase_onFunctionResult'); }).catch(e => this._handleError(e, 'functions')); }
 
     writeData(args) { if (!this._isReady('db')) return; return this.db.ref(args.PATH).set(this._parseValue(args.VALUE)).catch(error => this._handleError(error, 'db')); }
+    // НОВАЯ ФУНКЦИЯ: Установка команды на случай отключения
+    setDeleteOnDisconnect(args) {
+        if (!this._isReady('db')) return;
+        const path = args.PATH;
+        const value = this._parseValue(args.VALUE); // Здесь лучше передавать 'false', '0' или пустую строку
+        
+        // 1. Устанавливаем команду "на случай отключения"
+        const ref = this.db.ref(path);
+        
+        // Сначала очищаем старую команду (на всякий случай)
+        ref.onDisconnect().cancel(); 
+        
+        // Устанавливаем новую команду
+        return ref.onDisconnect().set(value)
+            .catch(error => this._handleError(error, 'db'));
+    }
+    
+    // (Необязательно, но полезно)
+    cancelOnDisconnect(args) {if (!this._isReady('db')) return;return this.db.ref(args.PATH).onDisconnect().cancel().catch(error => this._handleError(error, 'db'));}
     readData(args) { if (!this._isReady('db')) return Promise.resolve(''); return this.db.ref(args.PATH).get().then(snapshot => { if (!snapshot.exists()) { return ''; } const data = snapshot.val(); if (typeof data === 'object' && data !== null) { return JSON.stringify(data); } return data; }).catch(error => { this._handleError(error, 'db'); return 'ОШИБКА'; }); }
     listenForData(args) { if (!this._isReady('db')) return false; const path = args.PATH; if (this.dbListeners.has(path)) return; const listener = this.db.ref(path).on('value', snapshot => { const data = snapshot.val(); this.lastReceivedData = (data && typeof data === 'object') ? JSON.stringify(data) : data; this.runtime.startHats('ultimateFirebase_listenForData', { PATH: path }); }, error => this._handleError(error, 'db')); this.dbListeners.set(path, listener); return false; }
     getLastReceivedData() { return this.lastReceivedData; }
