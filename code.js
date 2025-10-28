@@ -1,3 +1,5 @@
+/* eslint-disable */
+// [НАЧАЛО КОДА]
 class UltimateFirebaseExtension {
     constructor(runtime) {
         this.runtime = runtime;
@@ -45,7 +47,6 @@ class UltimateFirebaseExtension {
                 { opcode: 'signInWithToken', blockType: Scratch.BlockType.COMMAND, text: 'Войти по токену [TOKEN]', arguments: { TOKEN: { type: Scratch.ArgumentType.STRING, defaultValue: 'eyJhbGciOi...' }}},
                 { opcode: 'signOut', blockType: Scratch.BlockType.COMMAND, text: 'Выйти из аккаунта'},
                 { opcode: 'getCurrentUser', blockType: Scratch.BlockType.REPORTER, text: 'Данные текущего пользователя [FIELD]', arguments: { FIELD: { type: Scratch.ArgumentType.STRING, menu: 'userFields' } } },
-                // [НОВЫЙ БЛОК] Добавлен блок для получения ID токена
                 { opcode: 'getCurrentUserIDToken', blockType: Scratch.BlockType.REPORTER, text: 'ID токен текущего пользователя'},
                 { opcode: 'isUserLoggedIn', blockType: Scratch.BlockType.BOOLEAN, text: 'Пользователь вошел в систему?' },
                 { opcode: 'updateUserProfile', blockType: Scratch.BlockType.COMMAND, text: 'Обновить профиль: имя [NAME] URL фото [PHOTO_URL]', arguments: { NAME: { type: Scratch.ArgumentType.STRING }, PHOTO_URL: { type: Scratch.ArgumentType.STRING }}},
@@ -86,7 +87,16 @@ class UltimateFirebaseExtension {
                 '---',
                 { blockType: Scratch.BlockType.LABEL, text: 'База данных в реальном времени (старая)' },
                 { opcode: 'writeData', blockType: Scratch.BlockType.COMMAND, text: 'Записать по пути [PATH] значение [VALUE]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1' }, VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '{"score": 100}' }}},
-                { opcode: 'setDeleteOnDisconnect', blockType: Scratch.BlockType.COMMAND, text: 'При отключении установить по пути [PATH] значение [VALUE]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/online' }, VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: 'false' }}},
+                
+                // [НОВЫЙ БЛОК] Добавлен блок для удаления данных
+                { opcode: 'deleteData', blockType: Scratch.BlockType.COMMAND, text: 'Удалить данные по пути [PATH]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/temp' }}},
+                
+                // [ИЗМЕНЕНО] Опкод переименован с setDeleteOnDisconnect на setOnDisconnect для ясности
+                { opcode: 'setOnDisconnect', blockType: Scratch.BlockType.COMMAND, text: 'При отключении установить по пути [PATH] значение [VALUE]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/online' }, VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: 'false' }}},
+                
+                // [НОВЫЙ БЛОК] Добавлен блок для удаления по пути при отключении
+                { opcode: 'removeOnDisconnect', blockType: Scratch.BlockType.COMMAND, text: 'При отключении удалить путь [PATH]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/temp_presence' }}},
+                
                 { opcode: 'cancelOnDisconnect', blockType: Scratch.BlockType.COMMAND, text: 'Отменить команду при отключении для пути [PATH]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/online' }}},
                 { opcode: 'readData', blockType: Scratch.BlockType.REPORTER, text: 'прочитать данные по пути [PATH]', arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'users/player1/score' }}},
                 { opcode: 'listenForData', blockType: Scratch.BlockType.HAT, text: 'Когда данные по пути [PATH] изменяются', isEdgeActivated: false, arguments: { PATH: { type: Scratch.ArgumentType.STRING, defaultValue: 'chats/main' }}},
@@ -131,7 +141,6 @@ class UltimateFirebaseExtension {
     isUserLoggedIn() { return !!this.currentUser; }
     getCurrentUser(args) { if (!this.currentUser) return ''; switch(args.FIELD) { case 'Email': return this.currentUser.email; case 'UID': return this.currentUser.uid; case 'Display Name': return this.currentUser.displayName; case 'Phone Number': return this.currentUser.phoneNumber; case 'Photo URL': return this.currentUser.photoURL; case 'Почта подтверждена?': return this.currentUser.emailVerified; default: return ''; } }
 
-    // [НОВАЯ ФУНКЦИЯ] Реализация получения ID токена
     getCurrentUserIDToken() {
         if (!this.currentUser) return Promise.resolve('');
         return this.currentUser.getIdToken(true) // true для принудительного обновления
@@ -174,13 +183,21 @@ class UltimateFirebaseExtension {
     httpsCallPost(args) { if (!this._isReady('functions')) return; const url = this._getHttpsFunctionUrl(args.ENDPOINT); if (!url) return; const postData = this._parseValue(args.DATA); return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(postData), }).then(response => { if (!response.ok) { throw new Error(`HTTP ошибка! Статус: ${response.status}`); } return response.json(); }).then(data => { this.lastFunctionResult = JSON.stringify(data); this.runtime.startHats('ultimateFirebase_onFunctionResult'); }).catch(e => this._handleError(e, 'functions')); }
 
     writeData(args) { if (!this._isReady('db')) return; return this.db.ref(args.PATH).set(this._parseValue(args.VALUE)).catch(error => this._handleError(error, 'db')); }
-    // НОВАЯ ФУНКЦИЯ: Установка команды на случай отключения
-    setDeleteOnDisconnect(args) {
+
+    // [НОВАЯ ФУНКЦИЯ] Удаление данных по пути
+    deleteData(args) {
+        if (!this._isReady('db')) return;
+        // Удаление данных в RTDB (эквивалентно .set(null))
+        return this.db.ref(args.PATH).remove()
+            .catch(error => this._handleError(error, 'db'));
+    }
+    
+    // [ИЗМЕНЕНО] Функция переименована с setDeleteOnDisconnect на setOnDisconnect
+    setOnDisconnect(args) {
         if (!this._isReady('db')) return;
         const path = args.PATH;
-        const value = this._parseValue(args.VALUE); // Здесь лучше передавать 'false', '0' или пустую строку
+        const value = this._parseValue(args.VALUE);
         
-        // 1. Устанавливаем команду "на случай отключения"
         const ref = this.db.ref(path);
         
         // Сначала очищаем старую команду (на всякий случай)
@@ -190,12 +207,27 @@ class UltimateFirebaseExtension {
         return ref.onDisconnect().set(value)
             .catch(error => this._handleError(error, 'db'));
     }
+
+    // [НОВАЯ ФУНКЦИЯ] Установка команды удаления на случай отключения
+    removeOnDisconnect(args) {
+        if (!this._isReady('db')) return;
+        const path = args.PATH;
+        const ref = this.db.ref(path);
+
+        // Очищаем старые команды
+        ref.onDisconnect().cancel();
+
+        // Устанавливаем команду на удаление
+        return ref.onDisconnect().remove()
+            .catch(error => this._handleError(error, 'db'));
+    }
     
-    // (Необязательно, но полезно)
     cancelOnDisconnect(args) {if (!this._isReady('db')) return;return this.db.ref(args.PATH).onDisconnect().cancel().catch(error => this._handleError(error, 'db'));}
+    
     readData(args) { if (!this._isReady('db')) return Promise.resolve(''); return this.db.ref(args.PATH).get().then(snapshot => { if (!snapshot.exists()) { return ''; } const data = snapshot.val(); if (typeof data === 'object' && data !== null) { return JSON.stringify(data); } return data; }).catch(error => { this._handleError(error, 'db'); return 'ОШИБКА'; }); }
     listenForData(args) { if (!this._isReady('db')) return false; const path = args.PATH; if (this.dbListeners.has(path)) return; const listener = this.db.ref(path).on('value', snapshot => { const data = snapshot.val(); this.lastReceivedData = (data && typeof data === 'object') ? JSON.stringify(data) : data; this.runtime.startHats('ultimateFirebase_listenForData', { PATH: path }); }, error => this._handleError(error, 'db')); this.dbListeners.set(path, listener); return false; }
     getLastReceivedData() { return this.lastReceivedData; }
 }
 
 Scratch.extensions.register(new UltimateFirebaseExtension(Scratch.vm.runtime));
+// [КОНЕЦ КОДА]
